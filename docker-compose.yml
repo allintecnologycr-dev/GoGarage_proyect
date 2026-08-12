@@ -1,0 +1,19 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: gogarage
+      POSTGRES_USER: gogarage
+      POSTGRES_PASSWORD: gogarage
+    ports:
+      - "5432:5432"
+    volumes:
+      - gogarage_db_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+volumes:
+  gogarage_db_data:
