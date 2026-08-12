@@ -1,3 +1,6 @@
+from urllib.parse import quote
+
+from django.conf import settings
 from django.db import transaction
 
 from rest_framework import serializers
@@ -5,7 +8,7 @@ from rest_framework import serializers
 from apps.clientes.models import Cliente, Vehiculo
 from apps.core.models import Membresia, Usuario
 
-from .models import Cita, EvidenciaFoto, OrdenTrabajo, RepuestoUsado, ServicioOrden
+from .models import Cita, Cotizacion, DetalleCotizacion, EvidenciaFoto, OrdenTrabajo, RepuestoUsado, ServicioOrden
 
 TAMANO_MAXIMO_FOTO_BYTES = 15 * 1024 * 1024
 
@@ -22,6 +25,78 @@ class RepuestoUsadoSerializer(serializers.ModelSerializer):
         model = RepuestoUsado
         fields = ["id", "orden", "repuesto", "cantidad", "costo_unitario"]
         read_only_fields = ["id"]
+
+
+class DetalleCotizacionSerializer(serializers.ModelSerializer):
+    subtotal = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = DetalleCotizacion
+        fields = ["id", "cotizacion", "descripcion", "cantidad", "precio_unitario", "subtotal"]
+        read_only_fields = ["id", "subtotal"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        taller = getattr(request, "taller", None)
+        if taller is not None:
+            self.fields["cotizacion"].queryset = Cotizacion.objects.filter(taller=taller)
+
+
+class CotizacionSerializer(serializers.ModelSerializer):
+    """
+    Cotización interna del taller. `link_publico`/`link_whatsapp` se calculan
+    a partir de `token_publico` — nunca exponen `id` ni `placa` como
+    credencial (ver docs/ARQUITECTURA.md sección 8).
+    """
+
+    detalles = DetalleCotizacionSerializer(many=True, read_only=True)
+    vehiculo_placa = serializers.CharField(source="orden.vehiculo.placa", read_only=True)
+    cliente_nombre = serializers.CharField(source="cliente.nombre", read_only=True)
+    vencida = serializers.BooleanField(read_only=True)
+    link_publico = serializers.SerializerMethodField()
+    link_whatsapp = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Cotizacion
+        fields = [
+            "id", "orden", "cliente", "cliente_nombre", "vehiculo_placa", "token_publico",
+            "subtotal", "impuestos", "total", "estado", "vencida", "fecha_creacion",
+            "fecha_expiracion", "fecha_respuesta", "detalles", "link_publico", "link_whatsapp",
+        ]
+        read_only_fields = [
+            "id", "cliente", "token_publico", "subtotal", "total", "estado",
+            "fecha_creacion", "fecha_respuesta", "detalles",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        taller = getattr(request, "taller", None)
+        if taller is not None:
+            self.fields["orden"].queryset = OrdenTrabajo.objects.filter(taller=taller)
+
+    def get_link_publico(self, obj):
+        return f"{settings.SITE_PUBLIC_BASE_URL}/api/v1/public/cotizaciones/{obj.token_publico}/"
+
+    def get_link_whatsapp(self, obj):
+        telefono = "".join(ch for ch in (obj.cliente.telefono or "") if ch.isdigit())
+        if not telefono:
+            return None
+        mensaje = (
+            f"Hola {obj.cliente.nombre}, te compartimos la cotización de tu vehículo "
+            f"{obj.orden.vehiculo.placa}: {self.get_link_publico(obj)}"
+        )
+        return f"https://wa.me/{telefono}?text={quote(mensaje)}"
+
+    def validate(self, attrs):
+        # El cliente de la cotización siempre se toma de la orden (nunca del
+        # payload), para que no quede asociada a un cliente que no es dueño
+        # de esa orden.
+        orden = attrs.get("orden") or getattr(self.instance, "orden", None)
+        if orden is not None:
+            attrs["cliente"] = orden.cliente
+        return attrs
 
 
 class EvidenciaFotoSerializer(serializers.ModelSerializer):
@@ -47,21 +122,43 @@ class EvidenciaFotoSerializer(serializers.ModelSerializer):
 
 
 class OrdenTrabajoSerializer(serializers.ModelSerializer):
+    """
+    `link_seguimiento`/`link_whatsapp_seguimiento` dejan compartir por
+    WhatsApp el link de estado público (ver docs/ARQUITECTURA.md sección
+    2.3), igual que `link_publico`/`link_whatsapp` en CotizacionSerializer.
+    """
+
     servicios = ServicioOrdenSerializer(many=True, read_only=True)
     repuestos_usados = RepuestoUsadoSerializer(many=True, read_only=True)
     evidencias_foto = EvidenciaFotoSerializer(many=True, read_only=True)
     vehiculo_placa = serializers.CharField(source="vehiculo.placa", read_only=True)
     cliente_nombre = serializers.CharField(source="cliente.nombre", read_only=True)
+    link_seguimiento = serializers.SerializerMethodField()
+    link_whatsapp_seguimiento = serializers.SerializerMethodField()
 
     class Meta:
         model = OrdenTrabajo
         fields = [
             "id", "vehiculo", "vehiculo_placa", "cliente", "cliente_nombre", "mecanico", "estado",
-            "fecha_ingreso", "fecha_estimada_entrega", "fecha_entrega_real",
+            "token_seguimiento", "fecha_ingreso", "fecha_estimada_entrega", "fecha_entrega_real",
             "kilometraje_ingreso", "diagnostico", "observaciones",
-            "servicios", "repuestos_usados", "evidencias_foto", "created_at", "updated_at",
+            "servicios", "repuestos_usados", "evidencias_foto",
+            "link_seguimiento", "link_whatsapp_seguimiento", "created_at", "updated_at",
         ]
-        read_only_fields = ["id", "fecha_ingreso", "created_at", "updated_at"]
+        read_only_fields = ["id", "token_seguimiento", "fecha_ingreso", "created_at", "updated_at"]
+
+    def get_link_seguimiento(self, obj):
+        return f"{settings.SITE_PUBLIC_BASE_URL}/api/v1/public/ordenes/{obj.token_seguimiento}/"
+
+    def get_link_whatsapp_seguimiento(self, obj):
+        telefono = "".join(ch for ch in (obj.cliente.telefono or "") if ch.isdigit())
+        if not telefono:
+            return None
+        mensaje = (
+            f"Hola {obj.cliente.nombre}, podés seguir el estado de tu vehículo "
+            f"{obj.vehiculo.placa} acá: {self.get_link_seguimiento(obj)}"
+        )
+        return f"https://wa.me/{telefono}?text={quote(mensaje)}"
 
 
 class CitaSerializer(serializers.ModelSerializer):

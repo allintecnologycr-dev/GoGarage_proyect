@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Cita, EvidenciaFoto, OrdenTrabajo, RepuestoUsado, ServicioOrden
+from .models import Cita, Cotizacion, DetalleCotizacion, EvidenciaFoto, OrdenTrabajo, RepuestoUsado, ServicioOrden
 
 
 class ServicioOrdenInline(admin.TabularInline):
@@ -33,6 +33,20 @@ class EvidenciaFotoAdmin(admin.ModelAdmin):
     list_display = ["id", "taller", "orden", "tipo", "subida_por", "created_at"]
     list_filter = ["taller", "tipo"]
     search_fields = ["orden__vehiculo__placa"]
+
+
+class DetalleCotizacionInline(admin.TabularInline):
+    model = DetalleCotizacion
+    extra = 0
+
+
+@admin.register(Cotizacion)
+class CotizacionAdmin(admin.ModelAdmin):
+    list_display = ["id", "taller", "orden", "cliente", "estado", "total", "fecha_creacion"]
+    list_filter = ["taller", "estado"]
+    search_fields = ["cliente__nombre", "orden__vehiculo__placa", "token_publico"]
+    readonly_fields = ["token_publico", "subtotal", "total", "fecha_creacion"]
+    inlines = [DetalleCotizacionInline]
 
 
 @admin.register(Cita)

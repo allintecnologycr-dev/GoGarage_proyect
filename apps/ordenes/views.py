@@ -6,9 +6,11 @@ from rest_framework.response import Response
 from apps.core.permissions import RolEnTaller, TienerTallerActivo
 from apps.core.viewsets import TenantViewSet
 
-from .models import Cita, EvidenciaFoto, OrdenTrabajo, RepuestoUsado, ServicioOrden
+from .models import Cita, Cotizacion, DetalleCotizacion, EvidenciaFoto, OrdenTrabajo, RepuestoUsado, ServicioOrden
 from .serializers import (
     CitaSerializer,
+    CotizacionSerializer,
+    DetalleCotizacionSerializer,
     EvidenciaFotoSerializer,
     OrdenTrabajoSerializer,
     RecepcionRapidaSerializer,
@@ -42,6 +44,39 @@ class EvidenciaFotoViewSet(TenantViewSet):
 
     def perform_create(self, serializer):
         serializer.save(taller=self.request.taller, subida_por=self.request.user)
+
+
+class CotizacionViewSet(TenantViewSet):
+    queryset = Cotizacion.objects.select_related("orden__vehiculo", "cliente").prefetch_related("detalles").all()
+    serializer_class = CotizacionSerializer
+    search_fields = ["cliente__nombre", "orden__vehiculo__placa"]
+    filterset_fields = ["estado", "orden", "cliente"]
+
+    @action(detail=True, methods=["post"], url_path="enviar")
+    def enviar(self, request, pk=None):
+        """Marca la cotización como enviada (queda lista para compartir el link)."""
+        cotizacion = self.get_object()
+        if cotizacion.estado != Cotizacion.Estado.BORRADOR:
+            return Response(
+                {"detail": "Solo una cotización en borrador se puede marcar como enviada."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        cotizacion.estado = Cotizacion.Estado.ENVIADA
+        cotizacion.save(update_fields=["estado"])
+        return Response(self.get_serializer(cotizacion).data)
+
+
+class DetalleCotizacionViewSet(viewsets.ModelViewSet):
+    """Sub-recurso de una cotización: se filtra por `cotizacion__taller`
+    porque no lleva `taller` propio (igual que servicios/repuestos de orden)."""
+
+    queryset = DetalleCotizacion.objects.select_related("cotizacion")
+    serializer_class = DetalleCotizacionSerializer
+    permission_classes = [TienerTallerActivo, RolEnTaller]
+    filterset_fields = ["cotizacion"]
+
+    def get_queryset(self):
+        return super().get_queryset().filter(cotizacion__taller=self.request.taller)
 
 
 class CitaViewSet(TenantViewSet):

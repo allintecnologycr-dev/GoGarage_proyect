@@ -36,6 +36,7 @@ INSTALLED_APPS = [
     "apps.ordenes",
     "apps.inventario",
     "apps.facturacion",
+    "apps.publico",
 ]
 
 MIDDLEWARE = [
@@ -77,9 +78,12 @@ ASGI_APPLICATION = "config.asgi.application"
 # Base de datos
 # En producción, DATABASE_URL apunta a Supabase (Postgres administrado).
 # En desarrollo, por defecto usa sqlite si no se define DATABASE_URL.
+# Nota: se usa config()+parse() (no dj_database_url.config()) porque este
+# último lee os.environ directamente, y python-decouple no vuelca el .env
+# ahí — con .config() a secas, DATABASE_URL del .env se ignoraba siempre.
 DATABASES = {
-    "default": dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+    "default": dj_database_url.parse(
+        config("DATABASE_URL", default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
         conn_max_age=600,
     )
 }
@@ -149,7 +153,16 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 25,
+    # Rate limiting específico de los endpoints públicos (apps.publico) para
+    # evitar fuerza bruta sobre los tokens (ver docs/ARQUITECTURA.md sección 8).
+    "DEFAULT_THROTTLE_RATES": {
+        "publico": "30/min",
+    },
 }
+
+# URL base pública del backend, usada para armar el link que se comparte por
+# WhatsApp (apps/ordenes/serializers.py:CotizacionSerializer.get_link_publico).
+SITE_PUBLIC_BASE_URL = config("SITE_PUBLIC_BASE_URL", default="http://localhost:8000")
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),

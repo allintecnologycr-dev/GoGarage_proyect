@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cotización — {{ taller_nombre }}</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f4f5f7; margin: 0; padding: 1rem; color: #1a1a1a;
+    }
+    .card {
+      max-width: 480px; margin: 0 auto; background: #fff; border-radius: 12px;
+      padding: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    h1 { font-size: 1.1rem; margin: 0 0 0.25rem; color: #555; }
+    h2 { font-size: 1.3rem; margin: 0 0 1rem; }
+    .badge {
+      display: inline-block; padding: 0.25rem 0.75rem; border-radius: 999px;
+      font-size: 0.8rem; font-weight: 600; margin-bottom: 1rem;
+    }
+    .badge-borrador, .badge-enviada { background: #fff3cd; color: #856404; }
+    .badge-aceptada { background: #d4edda; color: #155724; }
+    .badge-rechazada { background: #f8d7da; color: #721c24; }
+    .badge-vencida { background: #e2e3e5; color: #383d41; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+    th, td { text-align: left; padding: 0.5rem 0; font-size: 0.9rem; }
+    th { border-bottom: 1px solid #eee; color: #666; font-weight: 500; }
+    td.num, th.num { text-align: right; }
+    tfoot td { border-top: 1px solid #eee; font-weight: 600; padding-top: 0.75rem; }
+    .totales { margin-top: 0.5rem; }
+    .totales div { display: flex; justify-content: space-between; padding: 0.15rem 0; font-size: 0.9rem; }
+    .totales .total { font-size: 1.1rem; font-weight: 700; margin-top: 0.25rem; }
+    .acciones { display: flex; gap: 0.75rem; margin-top: 1.5rem; }
+    button {
+      flex: 1; padding: 0.9rem; border: none; border-radius: 8px; font-size: 1rem;
+      font-weight: 600; cursor: pointer;
+    }
+    .btn-aceptar { background: #198754; color: #fff; }
+    .btn-rechazar { background: #fff; color: #dc3545; border: 1px solid #dc3545; }
+    .mensaje { margin-top: 1.5rem; padding: 1rem; background: #f4f5f7; border-radius: 8px; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>{{ taller_nombre }}</h1>
+    <h2>{{ vehiculo }}</h2>
+
+    <span class="badge badge-{{ estado }}">{{ estado|upper }}</span>
+
+    <table>
+      <thead>
+        <tr><th>Descripción</th><th class="num">Cant.</th><th class="num">Subtotal</th></tr>
+      </thead>
+      <tbody>
+        {% for detalle in detalles %}
+        <tr>
+          <td>{{ detalle.descripcion }}</td>
+          <td class="num">{{ detalle.cantidad }}</td>
+          <td class="num">{{ detalle.subtotal }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="totales">
+      <div><span>Subtotal</span><span>{{ subtotal }}</span></div>
+      <div><span>Impuestos</span><span>{{ impuestos }}</span></div>
+      <div class="total"><span>Total</span><span>{{ total }}</span></div>
+    </div>
+
+    {% if respondible %}
+    <div class="acciones">
+      <form method="post" action="../aceptar/" style="flex:1">
+        {% csrf_token %}
+        <button type="submit" class="btn-aceptar">Aceptar</button>
+      </form>
+      <form method="post" action="../rechazar/" style="flex:1">
+        {% csrf_token %}
+        <button type="submit" class="btn-rechazar">Rechazar</button>
+      </form>
+    </div>
+    {% elif estado == "aceptada" %}
+    <div class="mensaje">Ya aceptaste esta cotización{% if fecha_respuesta %} el {{ fecha_respuesta }}{% endif %}. El taller se pondrá en contacto para continuar con el trabajo.</div>
+    {% elif estado == "rechazada" %}
+    <div class="mensaje">Rechazaste esta cotización{% if fecha_respuesta %} el {{ fecha_respuesta }}{% endif %}. Si cambiás de opinión, contactá directamente al taller.</div>
+    {% elif vencida %}
+    <div class="mensaje">Esta cotización venció. Contactá al taller para pedir una actualizada.</div>
+    {% endif %}
+  </div>
+</body>
+</html>

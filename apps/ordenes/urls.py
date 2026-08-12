@@ -4,6 +4,8 @@ from django.urls import include, path
 
 from .views import (
     CitaViewSet,
+    CotizacionViewSet,
+    DetalleCotizacionViewSet,
     EvidenciaFotoViewSet,
     OrdenTrabajoViewSet,
     RepuestoUsadoViewSet,
@@ -16,6 +18,8 @@ router.register("citas", CitaViewSet, basename="cita")
 router.register("servicios-orden", ServicioOrdenViewSet, basename="servicio-orden")
 router.register("repuestos-usados", RepuestoUsadoViewSet, basename="repuesto-usado")
 router.register("evidencias-foto", EvidenciaFotoViewSet, basename="evidencia-foto")
+router.register("cotizaciones", CotizacionViewSet, basename="cotizacion")
+router.register("detalles-cotizacion", DetalleCotizacionViewSet, basename="detalle-cotizacion")
 
 urlpatterns = [
     path("", include(router.urls)),

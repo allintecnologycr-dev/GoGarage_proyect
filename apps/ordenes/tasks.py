@@ -30,6 +30,41 @@ def enviar_recordatorio_cita(cita_id: int) -> str:
 
 
 @shared_task
+def notificar_respuesta_cotizacion(cotizacion_id: int) -> str:
+    """Avisa a los administradores del taller cuando el cliente acepta o
+    rechaza una cotización desde el link público (ver docs/ARQUITECTURA.md
+    sección 2.2 / 7)."""
+    from apps.core.models import Membresia
+
+    from .models import Cotizacion
+
+    try:
+        cotizacion = Cotizacion.objects.select_related("cliente", "orden__vehiculo", "taller").get(pk=cotizacion_id)
+    except Cotizacion.DoesNotExist:
+        return f"Cotización {cotizacion_id} no existe"
+
+    destinatarios = list(
+        Membresia.objects.filter(
+            taller=cotizacion.taller, rol=Membresia.Rol.ADMIN_TALLER, activo=True
+        ).values_list("usuario__email", flat=True)
+    )
+    destinatarios = [email for email in destinatarios if email]
+    if not destinatarios:
+        return f"Cotización {cotizacion_id}: sin administradores con email a quién notificar"
+
+    send_mail(
+        subject=f"Cotización {cotizacion.get_estado_display()} — {cotizacion.orden.vehiculo.placa}",
+        message=(
+            f"{cotizacion.cliente.nombre} {cotizacion.get_estado_display().lower()} la cotización "
+            f"del vehículo {cotizacion.orden.vehiculo.placa} (total {cotizacion.total})."
+        ),
+        from_email=None,
+        recipient_list=destinatarios,
+    )
+    return f"Notificación de cotización {cotizacion_id} enviada a {len(destinatarios)} administrador(es)"
+
+
+@shared_task
 def notificar_orden_lista(orden_id: int) -> str:
     from .models import OrdenTrabajo
 

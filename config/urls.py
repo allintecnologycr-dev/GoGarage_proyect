@@ -17,6 +17,7 @@ urlpatterns = [
     path("api/v1/", include("apps.ordenes.urls")),
     path("api/v1/", include("apps.inventario.urls")),
     path("api/v1/", include("apps.facturacion.urls")),
+    path("api/v1/public/", include("apps.publico.urls")),
 ]
 
 if settings.DEBUG:
