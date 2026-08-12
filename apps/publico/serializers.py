@@ -26,6 +26,7 @@ def _construir_timeline(estado):
     except ValueError:
         indice_actual = -1  # cancelado: fuera del happy path, no resalta ningún paso
 
+    ultimo_indice = len(_PASOS_TIMELINE) - 1
     pasos = []
     for i, (paso, etiqueta) in enumerate(_PASOS_TIMELINE):
         if indice_actual == -1:
@@ -33,7 +34,10 @@ def _construir_timeline(estado):
         elif i < indice_actual:
             estado_paso = "completado"
         elif i == indice_actual:
-            estado_paso = "actual"
+            # El último paso (entregado) es un hito terminado, no "en curso"
+            # como los intermedios — se muestra con el mismo check que los
+            # anteriores en vez de resaltado como "actual".
+            estado_paso = "completado" if i == ultimo_indice else "actual"
         else:
             estado_paso = "pendiente"
         pasos.append({"clave": paso, "etiqueta": etiqueta, "estado": estado_paso})
