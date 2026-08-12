@@ -184,3 +184,11 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
+# Ninguna vista consulta el resultado de una tarea vía AsyncResult (todas
+# son fire-and-forget con .delay()); con esto, .delay() no intenta abrir
+# una conexión al backend de resultados al encolar — sin esto, si Redis
+# está caído, .delay() se queda reintentando esa conexión ~1 minuto antes
+# de fallar, colgando la request del usuario que cierra la orden/responde
+# la cotización.
+CELERY_TASK_IGNORE_RESULT = True
+CELERY_BROKER_CONNECTION_TIMEOUT = 3
